@@ -45,6 +45,6 @@ def objective(trial):
 
 if __name__ == '__main__':
     import optuna
-    study = optuna.create_study()
-    study.optimize(objective, n_trials=100)
+    study = optuna.create_study(storage=optuna.storages.PlumtunaStorage())
+    study.optimize(objective, n_trials=1)
     print(study.best_trial)
