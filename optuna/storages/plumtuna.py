@@ -21,19 +21,22 @@ class PlumtunaStorage(base.BaseStorage):
     def _get(self, path):
         req = urllib.request.Request('http://localhost:7363{}'.format(path))
         with urllib.request.urlopen(req) as res:
-            assert res.status is 200
+            assert res.status is 200, res.reason
             return json.loads(res.read().decode())
 
-    def _post(self, path, body):
-        req = urllib.request.Request('http://localhost:7363{}'.format(path), json.dumps(body).encode())
+    def _post(self, path, body=None):
+        if body is None:
+            req = urllib.request.Request('http://localhost:7363{}'.format(path), method='POST')
+        else:
+            req = urllib.request.Request('http://localhost:7363{}'.format(path), json.dumps(body).encode())
         with urllib.request.urlopen(req) as res:
-            assert res.status is 200
+            assert res.status is 200, res.reason
             return json.loads(res.read().decode())
 
     def _put(self, path, body):
         req = urllib.request.Request('http://localhost:7363{}'.format(path), json.dumps(body).encode(), method='PUT')
         with urllib.request.urlopen(req) as res:
-            assert res.status is 200
+            assert res.status is 200, res.reason
             return json.loads(res.read().decode())
 
     def create_new_study_id(self, study_name=None):
@@ -54,7 +57,14 @@ class PlumtunaStorage(base.BaseStorage):
     def set_study_direction(self, study_id, direction):
         # type: (int, structs.StudyDirection) -> None
 
-        raise NotImplementedError
+        if direction == structs.StudyDirection.NOT_SET:
+            d = "NOT_SET"
+        elif direction == structs.StudyDirection.MINIMIZE:
+            d = "MINIMIZE"
+        else:
+            d = "MAXIMIZE"
+
+        self._put('/studies/{}/direction'.format(study_id), d)
 
     def set_study_system_attr(self, study_id, key, value):
         # type: (int, str, Any) -> None
@@ -66,7 +76,8 @@ class PlumtunaStorage(base.BaseStorage):
     def get_study_id_from_name(self, study_name):
         # type: (str) -> int
 
-        raise NotImplementedError
+        res = self._get('/study_names/{}'.format(study_name))
+        return res['study_id']
 
     def get_study_name_from_id(self, study_id):
         # type: (int) -> str
@@ -99,7 +110,7 @@ class PlumtunaStorage(base.BaseStorage):
     def create_new_trial_id(self, study_id):
         # type: (int) -> int
 
-        raise NotImplementedError
+        return self._post('/studies/{}/trials'.format(study_id))
 
     def set_trial_state(self, trial_id, state):
         # type: (int, structs.TrialState) -> None
