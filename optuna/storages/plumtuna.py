@@ -99,17 +99,17 @@ class PlumtunaStorage(base.BaseStorage):
     def get_study_user_attrs(self, study_id):
         # type: (int) -> Dict[str, Any]
 
-        raise NotImplementedError
+        return self._get('/studies/{}/user_attrs'.format(study_id))
 
     def get_study_system_attrs(self, study_id):
         # type: (int) -> Dict[str, Any]
 
-        raise NotImplementedError
+        return self._get('/studies/{}/system_attrs'.format(study_id))
 
     def get_all_study_summaries(self):
         # type: () -> List[structs.StudySummary]
 
-        raise NotImplementedError
+        return self._get('/studies')
 
     # Basic trial manipulation
 
@@ -121,41 +121,37 @@ class PlumtunaStorage(base.BaseStorage):
     def set_trial_state(self, trial_id, state):
         # type: (int, structs.TrialState) -> None
 
-        if state is structs.TrialState.RUNNING:
-            s = 'RUNNING'
-        elif state is structs.TrialState.COMPLETE:
-            s = 'COMPLETE'
-        elif state is structs.TrialState.PRUNED:
-            s = 'PRUNED'
-        else:
-            s = 'FAIL'
-
+        s = trial_state_to_json(state)
         self._put('/trials/{}/state'.format(trial_id), s)
 
     def set_trial_param(self, trial_id, param_name, param_value_internal, distribution):
         # type: (int, str, float, distributions.BaseDistribution) -> bool
 
-        raise NotImplementedError
+        self._put('/trials/{}/params/{}'.format(trial_id, param_name),
+                  {'value': param_value_internal,
+                   'distribution': distributions.distribution_to_json(distribution)})
+        return True
 
     def get_trial_param(self, trial_id, param_name):
         # type: (int, str) -> float
 
-        raise NotImplementedError
+        return self._get('/trials/{}/params/{}'.format(trial_id, param_name))
 
     def set_trial_value(self, trial_id, value):
         # type: (int, float) -> None
 
-        raise NotImplementedError
+        self._put('/trials/{}/value'.format(trial_id), value)
 
     def set_trial_intermediate_value(self, trial_id, step, intermediate_value):
         # type: (int, int, float) -> bool
 
-        raise NotImplementedError
+        self._put('/trials/{}/intermediate_values/{}'.format(trial_id, step), intermediate_values)
+        return True
 
     def set_trial_user_attr(self, trial_id, key, value):
         # type: (int, str, Any) -> None
 
-        raise NotImplementedError
+        self._put('/trials/{}/user_attrs/{}'.format(trial_id, key), value)
 
     def set_trial_system_attr(self, trial_id, key, value):
         # type: (int, str, Any) -> None
@@ -167,14 +163,28 @@ class PlumtunaStorage(base.BaseStorage):
     def get_trial(self, trial_id):
         # type: (int) -> structs.FrozenTrial
 
-        raise NotImplementedError
+        return self._get('/trials/{}'.format(trial_id)
 
     def get_all_trials(self, study_id):
         # type: (int) -> List[structs.FrozenTrial]
 
-        raise NotImplementedError
+        return self._get('/studies/{}/trials'.format(study_id))
 
     def get_n_trials(self, study_id, state=None):
         # type: (int, Optional[structs.TrialState]) -> int
 
-        raise NotImplementedError
+        if state is None:
+            return self._get('/studies/{}/n_trials'.format(study_id))
+        else:
+            return self._get('/studies/{}/n_trials?state={}'.format(study_id, trial_state_to_json(state)))
+
+
+def trial_state_to_json(state):
+    if state is structs.TrialState.RUNNING:
+        return 'RUNNING'
+    elif state is structs.TrialState.COMPLETE:
+        return 'COMPLETE'
+    elif state is structs.TrialState.PRUNED:
+        return 'PRUNED'
+    else:
+        return 'FAIL'
