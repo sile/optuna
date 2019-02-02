@@ -45,7 +45,10 @@ def objective(trial):
 
 
 if __name__ == '__main__':
-    study = optuna.create_study()
+    study = optuna.create_study(study_name='foo',
+                                load_if_exists=True,
+                                pruner=optuna.pruners.SuccessiveHalvingPruner(),
+                                storage=optuna.storages.PlumtunaStorage())
     study.optimize(objective, n_trials=100)
 
     pruned_trials = [t for t in study.trials if t.state == optuna.structs.TrialState.PRUNED]

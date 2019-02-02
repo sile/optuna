@@ -1,9 +1,11 @@
 from datetime import datetime
 import json
+import requests
 from typing import Any  # NOQA
 from typing import Dict  # NOQA
 from typing import List  # NOQA
 from typing import Optional  # NOQA
+import urllib.parse
 import urllib.request
 import uuid
 
@@ -14,30 +16,27 @@ from optuna import structs
 
 
 class PlumtunaStorage(base.BaseStorage):
-    def __init__(self):
-
-        pass
+    def __init__(self, host='localhost', port=7363):
+        self.host = host
+        self.port = port
 
     def _get(self, path):
-        req = urllib.request.Request('http://localhost:7363{}'.format(path))
-        with urllib.request.urlopen(req) as res:
-            assert res.status is 200, res.reason
-            return json.loads(res.read().decode())
+        res = requests.get('http://{}:{}{}'.format(self.host, self.port, path))
+        assert res.status_code is 200, '{}: {}'.format(path, res.text)
+        return res.json()
 
     def _post(self, path, body=None):
         if body is None:
-            req = urllib.request.Request('http://localhost:7363{}'.format(path), method='POST')
+            res = requests.post('http://{}:{}{}'.format(self.host, self.port, path))
         else:
-            req = urllib.request.Request('http://localhost:7363{}'.format(path), json.dumps(body).encode())
-        with urllib.request.urlopen(req) as res:
-            assert res.status is 200, res.reason
-            return json.loads(res.read().decode())
+            res = requests.post('http://{}:{}{}'.format(self.host, self.port, path), data=json.dumps(body))
+        assert res.status_code is 200, '{}: {}'.format(path, res.text)
+        return res.json()
 
     def _put(self, path, body):
-        req = urllib.request.Request('http://localhost:7363{}'.format(path), json.dumps(body).encode(), method='PUT')
-        with urllib.request.urlopen(req) as res:
-            assert res.status is 200, res.reason
-            return json.loads(res.read().decode())
+        res = requests.put('http://{}:{}{}'.format(self.host, self.port, path), data=json.dumps(body))
+        assert res.status_code is 200, '{}: {}'.format(path, res.text)
+        return res.json()
 
     def create_new_study_id(self, study_name=None):
         # type: (Optional[str]) -> int
@@ -47,12 +46,15 @@ class PlumtunaStorage(base.BaseStorage):
             study_name = DEFAULT_STUDY_NAME_PREFIX + study_uuid
 
         res = self._post('/studies', {'study_name': study_name})
+        if res['study_id'] is None:
+            raise structs.DuplicatedStudyError
+
         return res['study_id']
 
     def set_study_user_attr(self, study_id, key, value):
         # type: (int, str, Any) -> None
 
-        self._put('/studies/{}/user_attrs/{}'.format(study_id, key), value)
+        self._put('/studies/{}/user_attrs/{}'.format(study_id, urllib.parse.quote_plus(key)), value)
 
     def set_study_direction(self, study_id, direction):
         # type: (int, structs.StudyDirection) -> None
@@ -69,7 +71,7 @@ class PlumtunaStorage(base.BaseStorage):
     def set_study_system_attr(self, study_id, key, value):
         # type: (int, str, Any) -> None
 
-        self._put('/studies/{}/system_attrs/{}'.format(study_id, key), value)
+        self._put('/studies/{}/system_attrs/{}'.format(study_id, urllib.parse.quote_plus(key)), value)
 
     # Basic study access
 
@@ -89,9 +91,9 @@ class PlumtunaStorage(base.BaseStorage):
         # type: (int) -> structs.StudyDirection
 
         d = self._get('/studies/{}/direction'.format(study_id))
-        if d is 'NOT_SET':
+        if d == 'NOT_SET':
             return structs.StudyDirection.NOT_SET
-        elif d is 'MINIMIZE':
+        elif d == 'MINIMIZE':
             return structs.StudyDirection.MINIMIZE
         else:
             return structs.StudyDirection.MAXIMIZE
@@ -121,7 +123,7 @@ class PlumtunaStorage(base.BaseStorage):
     def set_trial_state(self, trial_id, state):
         # type: (int, structs.TrialState) -> None
 
-        s = trial_state_to_json(state)
+        s = trial_state_to_str(state)
         self._put('/trials/{}/state'.format(trial_id), s)
 
     def set_trial_param(self, trial_id, param_name, param_value_internal, distribution):
@@ -145,30 +147,30 @@ class PlumtunaStorage(base.BaseStorage):
     def set_trial_intermediate_value(self, trial_id, step, intermediate_value):
         # type: (int, int, float) -> bool
 
-        self._put('/trials/{}/intermediate_values/{}'.format(trial_id, step), intermediate_values)
+        self._put('/trials/{}/intermediate_values/{}'.format(trial_id, step), intermediate_value)
         return True
 
     def set_trial_user_attr(self, trial_id, key, value):
         # type: (int, str, Any) -> None
 
-        self._put('/trials/{}/user_attrs/{}'.format(trial_id, key), value)
+        self._put('/trials/{}/user_attrs/{}'.format(trial_id, urllib.parse.quote_plus(key)), value)
 
     def set_trial_system_attr(self, trial_id, key, value):
         # type: (int, str, Any) -> None
 
-        self._put('/trials/{}/system_attrs/{}'.format(trial_id, key), value)
+        self._put('/trials/{}/system_attrs/{}'.format(trial_id, urllib.parse.quote_plus(key)), value)
 
     # Basic trial access
 
     def get_trial(self, trial_id):
         # type: (int) -> structs.FrozenTrial
 
-        return self._get('/trials/{}'.format(trial_id)
+        return dict_to_trial(self._get('/trials/{}'.format(trial_id)))
 
     def get_all_trials(self, study_id):
         # type: (int) -> List[structs.FrozenTrial]
 
-        return self._get('/studies/{}/trials'.format(study_id))
+        return [dict_to_trial(t) for t in self._get('/studies/{}/trials'.format(study_id))]
 
     def get_n_trials(self, study_id, state=None):
         # type: (int, Optional[structs.TrialState]) -> int
@@ -176,10 +178,10 @@ class PlumtunaStorage(base.BaseStorage):
         if state is None:
             return self._get('/studies/{}/n_trials'.format(study_id))
         else:
-            return self._get('/studies/{}/n_trials?state={}'.format(study_id, trial_state_to_json(state)))
+            return self._get('/studies/{}/n_trials?state={}'.format(study_id, trial_state_to_str(state)))
 
 
-def trial_state_to_json(state):
+def trial_state_to_str(state):
     if state is structs.TrialState.RUNNING:
         return 'RUNNING'
     elif state is structs.TrialState.COMPLETE:
@@ -188,3 +190,34 @@ def trial_state_to_json(state):
         return 'PRUNED'
     else:
         return 'FAIL'
+
+def str_to_trial_state(s):
+    if s == 'RUNNING':
+        return structs.TrialState.RUNNING
+    elif s == 'COMPLETE':
+        return structs.TrialState.COMPLETE
+    elif s == 'PRUNED':
+        return structs.TrialState.PRUNED
+    else:
+        return structs.TrialState.FAIL
+
+def dict_to_trial(d):
+    params = {}
+    params_in_internal_repr = {}
+    for k,v in d['params'].items():
+        distribution = distributions.json_to_distribution(v['distribution'])
+        params[k] = distribution.to_external_repr(v['value'])
+        params_in_internal_repr[k] = v['value']
+
+    return structs.FrozenTrial(
+        trial_id=d['id'],
+        state=str_to_trial_state(d['state']),
+        params=params,
+        user_attrs=d['user_attrs'],
+        system_attrs=d['system_attrs'],
+        value=d['value'],
+        intermediate_values=dict((int(k),v) for k,v in d['intermediate_values'].items()),
+        params_in_internal_repr=params_in_internal_repr,
+        datetime_start=datetime.fromtimestamp(d['datetime_start']),
+        datetime_complete=datetime.fromtimestamp(d['datetime_end']) if d['datetime_end'] else None,
+    )
