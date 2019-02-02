@@ -52,7 +52,7 @@ class PlumtunaStorage(base.BaseStorage):
     def set_study_user_attr(self, study_id, key, value):
         # type: (int, str, Any) -> None
 
-        raise NotImplementedError
+        self._put('/studies/{}/user_attrs/{}'.format(study_id, key), value)
 
     def set_study_direction(self, study_id, direction):
         # type: (int, structs.StudyDirection) -> None
@@ -88,7 +88,13 @@ class PlumtunaStorage(base.BaseStorage):
     def get_study_direction(self, study_id):
         # type: (int) -> structs.StudyDirection
 
-        raise NotImplementedError
+        d = self._get('/studies/{}/direction'.format(study_id))
+        if d is 'NOT_SET':
+            return structs.StudyDirection.NOT_SET
+        elif d is 'MINIMIZE':
+            return structs.StudyDirection.MINIMIZE
+        else:
+            return structs.StudyDirection.MAXIMIZE
 
     def get_study_user_attrs(self, study_id):
         # type: (int) -> Dict[str, Any]
@@ -115,7 +121,16 @@ class PlumtunaStorage(base.BaseStorage):
     def set_trial_state(self, trial_id, state):
         # type: (int, structs.TrialState) -> None
 
-        raise NotImplementedError
+        if state is structs.TrialState.RUNNING:
+            s = 'RUNNING'
+        elif state is structs.TrialState.COMPLETE:
+            s = 'COMPLETE'
+        elif state is structs.TrialState.PRUNED:
+            s = 'PRUNED'
+        else:
+            s = 'FAIL'
+
+        self._put('/trials/{}/state'.format(trial_id), s)
 
     def set_trial_param(self, trial_id, param_name, param_value_internal, distribution):
         # type: (int, str, float, distributions.BaseDistribution) -> bool
@@ -145,7 +160,7 @@ class PlumtunaStorage(base.BaseStorage):
     def set_trial_system_attr(self, trial_id, key, value):
         # type: (int, str, Any) -> None
 
-        raise NotImplementedError
+        self._put('/trials/{}/system_attrs/{}'.format(trial_id, key), value)
 
     # Basic trial access
 
