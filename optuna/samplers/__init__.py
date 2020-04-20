@@ -38,7 +38,7 @@ def intersection_search_space(study, ordered_dict=False):
     """
 
     search_space = None
-    for trial in study.trials:
+    for trial in study.get_trials(deepcopy=False):
         if trial.state != optuna.trial.TrialState.COMPLETE:
             continue
 
