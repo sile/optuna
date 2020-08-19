@@ -16,7 +16,7 @@ _logger = optuna.logging.get_logger(__name__)
 
 @experimental("2.0.0")
 def plot_pareto_front(
-    study: MultiObjectiveStudy, names: Optional[List[str]] = None
+    study: MultiObjectiveStudy, names: Optional[List[str]] = None, title=""
 ) -> "go.Figure":
     """Plot the pareto front of a study.
 
@@ -65,31 +65,53 @@ def plot_pareto_front(
     _imports.check()
 
     if study.n_objectives == 2:
-        return _get_pareto_front_2d(study, names)
+        return _get_pareto_front_2d(study, names, title=title)
     elif study.n_objectives == 3:
         return _get_pareto_front_3d(study, names)
     else:
         raise ValueError("`plot_pareto_front` function only supports 2 or 3 objective studies.")
 
 
-def _get_pareto_front_2d(study: MultiObjectiveStudy, names: Optional[List[str]]) -> "go.Figure":
+def _get_pareto_front_2d(
+    study: MultiObjectiveStudy, names: Optional[List[str]], title
+) -> "go.Figure":
     if names is None:
-        names = ["Objective 0", "Objective 1"]
+        # names = ["Objective 0", "Objective 1"]
+        names = ["MACs (multiply–accumulate operations)", "Validation Accuracy"]
     elif len(names) != 2:
         raise ValueError("The length of `names` is supposed to be 2.")
 
+    all_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
+    n_trials = len(all_trials)
+
     trials = study.get_pareto_front_trials()
+    n_pareto_front_trials = len(trials)
     if len(trials) == 0:
         _logger.warning("Your study does not have any completed trials.")
 
-    data = go.Scatter(
-        x=[t.values[0] for t in trials],
-        y=[t.values[1] for t in trials],
-        text=[_make_hovertext(t) for t in trials],
-        mode="markers",
-        hovertemplate="%{text}<extra></extra>",
+    data = []
+    data.append(
+        go.Scatter(
+            x=[t.values[0] for t in all_trials if t not in trials],
+            y=[abs(t.values[1]) for t in all_trials if t not in trials],
+            text=[_make_hovertext(t) for t in trials],
+            mode="markers",
+            name="Dominated Trials (N={})".format(n_trials - n_pareto_front_trials),
+        )
     )
-    layout = go.Layout(title="Pareto-front Plot", xaxis_title=names[0], yaxis_title=names[1])
+    data.append(
+        go.Scatter(
+            x=[t.values[0] for t in trials],
+            y=[abs(t.values[1]) for t in trials],
+            text=[_make_hovertext(t) for t in trials],
+            mode="markers",
+            hovertemplate="%{text}<extra></extra>",
+            name="Pareto Front Trials (N={})".format(n_pareto_front_trials),
+        )
+    )
+
+    title = "Pareto-front Plot: {}".format(title)
+    layout = go.Layout(title=title, xaxis_title=names[0], yaxis_title=names[1])
     return go.Figure(data=data, layout=layout)
 
 
