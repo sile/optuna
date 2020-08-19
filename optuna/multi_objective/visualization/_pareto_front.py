@@ -16,7 +16,7 @@ _logger = optuna.logging.get_logger(__name__)
 
 @experimental("2.0.0")
 def plot_pareto_front(
-    study: MultiObjectiveStudy, names: Optional[List[str]] = None, title=""
+    study: MultiObjectiveStudy, names: Optional[List[str]] = None, title="", baseline=[]
 ) -> "go.Figure":
     """Plot the pareto front of a study.
 
@@ -65,7 +65,7 @@ def plot_pareto_front(
     _imports.check()
 
     if study.n_objectives == 2:
-        return _get_pareto_front_2d(study, names, title=title)
+        return _get_pareto_front_2d(study, names, title=title, baseline=baseline)
     elif study.n_objectives == 3:
         return _get_pareto_front_3d(study, names)
     else:
@@ -73,11 +73,11 @@ def plot_pareto_front(
 
 
 def _get_pareto_front_2d(
-    study: MultiObjectiveStudy, names: Optional[List[str]], title
+    study: MultiObjectiveStudy, names: Optional[List[str]], title, baseline
 ) -> "go.Figure":
     if names is None:
         # names = ["Objective 0", "Objective 1"]
-        names = ["MACs (multiply–accumulate operations)", "Validation Accuracy"]
+        names = ["MACs (multiply–accumulate operations)", "Top-1 Accuracy"]
     elif len(names) != 2:
         raise ValueError("The length of `names` is supposed to be 2.")
 
@@ -109,6 +109,8 @@ def _get_pareto_front_2d(
             name="Pareto Front Trials (N={})".format(n_pareto_front_trials),
         )
     )
+
+    data.append(go.Scatter(x=[baseline[0]], y=[baseline[1]], mode="markers", name="MobileNetV2",))
 
     title = "Pareto-front Plot: {}".format(title)
     layout = go.Layout(title=title, xaxis_title=names[0], yaxis_title=names[1])
